@@ -33,6 +33,8 @@ Initial MERN monorepo scaffold for the hackathon project.
 ## API
 
 - `GET /api/health`
+- `POST /api/courses/generate-outline`
+- `POST /api/lessons/generate`
 
 Response:
 
@@ -40,5 +42,89 @@ Response:
 {
   "ok": true,
   "service": "text-to-learn-api"
+}
+```
+
+### POST /api/courses/generate-outline
+
+Request:
+
+```json
+{
+  "topic": "JavaScript closures"
+}
+```
+
+Response (shape):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "title": "Javascript Closures Course",
+    "description": "A practical and beginner-friendly course outline for Javascript Closures.",
+    "tags": ["javascript-closures", "javascript", "closures", "beginner-friendly"],
+    "modules": [
+      {
+        "id": "module-1",
+        "title": "Javascript Closures Module 1",
+        "lessons": [
+          { "id": "m1-l1", "title": "Javascript Closures Lesson 1.1" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### POST /api/lessons/generate
+
+Request:
+
+```json
+{
+  "courseTitle": "Javascript Closures Course",
+  "moduleTitle": "Javascript Closures Module 1",
+  "lessonTitle": "Javascript Closures Lesson 1.1"
+}
+```
+
+Response (shape):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "title": "Javascript Closures Lesson 1.1",
+    "objectives": ["..."],
+    "content": [
+      { "type": "heading", "text": "..." },
+      { "type": "paragraph", "text": "..." },
+      { "type": "code", "language": "javascript", "code": "..." },
+      { "type": "video", "provider": "youtube", "title": "...", "url": "..." },
+      { "type": "mcq", "text": "..." }
+    ],
+    "readings": ["..."],
+    "mcqs": [
+      {
+        "question": "...",
+        "options": ["...", "...", "...", "..."],
+        "answer": "A",
+        "explanation": "..."
+      }
+    ]
+  }
+}
+```
+
+Error response (for validation issues):
+
+```json
+{
+  "ok": false,
+  "error": {
+    "message": "Invalid request body",
+    "details": ["topic is required and must be a non-empty string"]
+  }
 }
 ```
