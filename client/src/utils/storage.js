@@ -1,14 +1,14 @@
 const KEYS = {
-  latestOutline: 'ttl_latest_outline',
-  latestLesson: 'ttl_latest_lesson',
+  latestCourse: 'ttl_latest_course',
+  lessonCachePrefix: 'ttl_lesson_',
 }
 
-export const saveLatestOutline = (outlinePayload) => {
-  localStorage.setItem(KEYS.latestOutline, JSON.stringify(outlinePayload))
+export const saveLatestCourse = (coursePayload) => {
+  localStorage.setItem(KEYS.latestCourse, JSON.stringify(coursePayload))
 }
 
-export const getLatestOutline = () => {
-  const raw = localStorage.getItem(KEYS.latestOutline)
+export const getLatestCourse = () => {
+  const raw = localStorage.getItem(KEYS.latestCourse)
   if (!raw) return null
 
   try {
@@ -18,12 +18,16 @@ export const getLatestOutline = () => {
   }
 }
 
-export const saveLatestLesson = (lessonPayload) => {
-  localStorage.setItem(KEYS.latestLesson, JSON.stringify(lessonPayload))
+export const removeLatestCourse = () => {
+  localStorage.removeItem(KEYS.latestCourse)
 }
 
-export const getLatestLesson = () => {
-  const raw = localStorage.getItem(KEYS.latestLesson)
+export const saveLessonCache = (lessonId, lessonPayload) => {
+  localStorage.setItem(`${KEYS.lessonCachePrefix}${lessonId}`, JSON.stringify(lessonPayload))
+}
+
+export const getLessonCache = (lessonId) => {
+  const raw = localStorage.getItem(`${KEYS.lessonCachePrefix}${lessonId}`)
   if (!raw) return null
 
   try {

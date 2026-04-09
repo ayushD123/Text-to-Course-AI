@@ -1,12 +1,14 @@
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
 
-const navLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'Course Demo', to: '/courses/sample-course' },
-  { label: 'Lesson Demo', to: '/lessons/sample-lesson' },
-]
+const navLinks = [{ label: 'Home', to: '/' }]
 
 function AppLayout() {
+  const navigate = useNavigate()
+
+  const handleCoursesClick = () => {
+    navigate('/?section=courses')
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-900/90 backdrop-blur">
@@ -28,6 +30,14 @@ function AppLayout() {
                 {link.label}
               </Link>
             ))}
+
+            <button
+              type="button"
+              onClick={handleCoursesClick}
+              className="whitespace-nowrap rounded-lg border border-slate-700 px-3 py-2 text-left text-sm text-slate-200 hover:border-indigo-500 hover:text-indigo-300"
+            >
+              Courses
+            </button>
           </nav>
         </aside>
 

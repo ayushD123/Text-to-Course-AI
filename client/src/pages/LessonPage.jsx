@@ -1,42 +1,40 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import ErrorMessage from '../components/ErrorMessage'
 import LessonRenderer from '../components/LessonRenderer'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { postJson } from '../utils/apiClient'
-import { getLatestLesson, saveLatestLesson } from '../utils/storage'
+import { getJson, postJson } from '../utils/apiClient'
+import { getLessonCache, saveLessonCache } from '../utils/storage'
 
 function LessonPage() {
-  const [searchParams] = useSearchParams()
+  const { lessonId } = useParams()
   const navigate = useNavigate()
-  const [lesson, setLesson] = useState(() => getLatestLesson())
+  const [lesson, setLesson] = useState(() => getLessonCache(lessonId))
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const courseTitle = searchParams.get('courseTitle') || ''
-  const moduleTitle = searchParams.get('moduleTitle') || ''
-  const lessonTitle = searchParams.get('lessonTitle') || ''
-
   useEffect(() => {
-    if (!courseTitle || !moduleTitle || !lessonTitle) {
-      setError('Missing lesson context. Please open a lesson from the course page.')
-      return
-    }
-
     const fetchLesson = async () => {
       try {
         setIsLoading(true)
         setError('')
 
-        const response = await postJson('/lessons/generate', {
-          courseTitle,
-          moduleTitle,
-          lessonTitle,
+        const currentLessonResponse = await getJson(`/lessons/${lessonId}`)
+        const currentLesson = currentLessonResponse.data
+
+        if (currentLesson.status === 'generated') {
+          setLesson(currentLesson)
+          saveLessonCache(lessonId, currentLesson)
+          return
+        }
+
+        const generatedResponse = await postJson('/lessons/generate', {
+          lessonId,
         })
 
-        setLesson(response.data)
-        saveLatestLesson(response.data)
+        setLesson(generatedResponse.data)
+        saveLessonCache(lessonId, generatedResponse.data)
       } catch (requestError) {
         setError(requestError.message || 'Failed to generate lesson content.')
       } finally {
@@ -45,7 +43,7 @@ function LessonPage() {
     }
 
     fetchLesson()
-  }, [courseTitle, moduleTitle, lessonTitle])
+  }, [lessonId])
 
   return (
     <section className="space-y-4">

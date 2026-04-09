@@ -1,7 +1,29 @@
+const mongoose = require('mongoose')
+
+const Course = require('../models/Course')
+const Module = require('../models/Module')
+const Lesson = require('../models/Lesson')
 const { generateOutline, generateLesson } = require('../services/mockGeneratorService')
 const AppError = require('../utils/appError')
 
-const generateCourseOutline = (req, res, next) => {
+const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
+  id: String(lessonDoc._id),
+  courseId: String(lessonDoc.courseId),
+  moduleId: String(lessonDoc.moduleId),
+  title: lessonDoc.title,
+  order: lessonDoc.order,
+  status: lessonDoc.status,
+  objectives: lessonDoc.objectives,
+  content: lessonDoc.content,
+  readings: lessonDoc.readings,
+  mcqs: lessonDoc.mcqs,
+  courseTitle,
+  moduleTitle,
+  createdAt: lessonDoc.createdAt,
+  updatedAt: lessonDoc.updatedAt,
+})
+
+const generateCourseOutline = async (req, res, next) => {
   try {
     const { topic } = req.body || {}
 
@@ -11,45 +33,276 @@ const generateCourseOutline = (req, res, next) => {
 
     const outline = generateOutline(topic)
 
-    return res.status(200).json({
+    const courseDoc = await Course.create({
+      topic: topic.trim(),
+      title: outline.title,
+      description: outline.description,
+      tags: outline.tags,
+    })
+
+    const modules = []
+
+    for (let moduleIndex = 0; moduleIndex < outline.modules.length; moduleIndex += 1) {
+      const outlineModule = outline.modules[moduleIndex]
+
+      const moduleDoc = await Module.create({
+        courseId: courseDoc._id,
+        title: outlineModule.title,
+        order: moduleIndex + 1,
+      })
+
+      const lessonDocs = await Lesson.insertMany(
+        outlineModule.lessons.map((lesson, lessonIndex) => ({
+          courseId: courseDoc._id,
+          moduleId: moduleDoc._id,
+          title: lesson.title,
+          order: lessonIndex + 1,
+          status: 'stub',
+        })),
+      )
+
+      modules.push({
+        id: String(moduleDoc._id),
+        title: moduleDoc.title,
+        order: moduleDoc.order,
+        lessons: lessonDocs.map((lessonDoc) => ({
+          id: String(lessonDoc._id),
+          title: lessonDoc.title,
+          order: lessonDoc.order,
+          status: lessonDoc.status,
+        })),
+      })
+    }
+
+    return res.status(201).json({
       ok: true,
-      data: outline,
+      data: {
+        id: String(courseDoc._id),
+        topic: courseDoc.topic,
+        title: courseDoc.title,
+        description: courseDoc.description,
+        tags: courseDoc.tags,
+        modules,
+        createdAt: courseDoc.createdAt,
+        updatedAt: courseDoc.updatedAt,
+      },
     })
   } catch (error) {
     return next(error)
   }
 }
 
-const generateLessonContent = (req, res, next) => {
+const generateLessonContent = async (req, res, next) => {
   try {
-    const { courseTitle, moduleTitle, lessonTitle } = req.body || {}
-    const errors = []
+    const { lessonId } = req.body || {}
 
-    if (typeof courseTitle !== 'string' || !courseTitle.trim()) {
-      errors.push('courseTitle is required and must be a non-empty string')
+    if (typeof lessonId !== 'string' || !lessonId.trim()) {
+      throw new AppError(400, 'Invalid request body', ['lessonId is required and must be a non-empty string'])
     }
 
-    if (typeof moduleTitle !== 'string' || !moduleTitle.trim()) {
-      errors.push('moduleTitle is required and must be a non-empty string')
+    if (!mongoose.Types.ObjectId.isValid(lessonId)) {
+      throw new AppError(400, 'Invalid request body', ['lessonId must be a valid MongoDB ObjectId'])
     }
 
-    if (typeof lessonTitle !== 'string' || !lessonTitle.trim()) {
-      errors.push('lessonTitle is required and must be a non-empty string')
+    const lessonDoc = await Lesson.findById(lessonId)
+
+    if (!lessonDoc) {
+      throw new AppError(404, 'Lesson not found')
     }
 
-    if (errors.length) {
-      throw new AppError(400, 'Invalid request body', errors)
+    const [courseDoc, moduleDoc] = await Promise.all([
+      Course.findById(lessonDoc.courseId),
+      Module.findById(lessonDoc.moduleId),
+    ])
+
+    if (!courseDoc || !moduleDoc) {
+      throw new AppError(404, 'Associated course/module not found for lesson')
+    }
+
+    if (lessonDoc.status === 'generated' && Array.isArray(lessonDoc.content) && lessonDoc.content.length > 0) {
+      return res.status(200).json({
+        ok: true,
+        data: formatLesson(lessonDoc, {
+          courseTitle: courseDoc.title,
+          moduleTitle: moduleDoc.title,
+        }),
+      })
     }
 
     const lesson = generateLesson({
-      courseTitle: courseTitle.trim(),
-      moduleTitle: moduleTitle.trim(),
-      lessonTitle: lessonTitle.trim(),
+      courseTitle: courseDoc.title,
+      moduleTitle: moduleDoc.title,
+      lessonTitle: lessonDoc.title,
     })
+
+    const updatedLesson = await Lesson.findByIdAndUpdate(
+      lessonId,
+      {
+        $set: {
+          objectives: lesson.objectives,
+          content: lesson.content,
+          readings: lesson.readings,
+          mcqs: lesson.mcqs,
+          status: 'generated',
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    )
+
+    if (!updatedLesson) {
+      throw new AppError(404, 'Lesson not found during update')
+    }
 
     return res.status(200).json({
       ok: true,
-      data: lesson,
+      data: formatLesson(updatedLesson, {
+        courseTitle: courseDoc.title,
+        moduleTitle: moduleDoc.title,
+      }),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const getCourses = async (req, res, next) => {
+  try {
+    const courses = await Course.find().sort({ createdAt: -1 }).lean()
+
+    return res.status(200).json({
+      ok: true,
+      data: courses.map((course) => ({
+        id: String(course._id),
+        topic: course.topic,
+        title: course.title,
+        description: course.description,
+        tags: course.tags,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+      })),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const getCourseById = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(400, 'Invalid course id')
+    }
+
+    const course = await Course.findById(id).lean()
+
+    if (!course) {
+      throw new AppError(404, 'Course not found')
+    }
+
+    const modules = await Module.find({ courseId: course._id }).sort({ order: 1 }).lean()
+
+    const moduleIds = modules.map((moduleItem) => moduleItem._id)
+    const lessons = await Lesson.find({ moduleId: { $in: moduleIds } }).sort({ order: 1 }).lean()
+
+    const lessonsByModuleId = lessons.reduce((acc, lesson) => {
+      const key = String(lesson.moduleId)
+      if (!acc[key]) acc[key] = []
+      acc[key].push({
+        id: String(lesson._id),
+        title: lesson.title,
+        order: lesson.order,
+        status: lesson.status,
+      })
+      return acc
+    }, {})
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        id: String(course._id),
+        topic: course.topic,
+        title: course.title,
+        description: course.description,
+        tags: course.tags,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+        modules: modules.map((moduleItem) => ({
+          id: String(moduleItem._id),
+          title: moduleItem.title,
+          order: moduleItem.order,
+          lessons: lessonsByModuleId[String(moduleItem._id)] || [],
+        })),
+      },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const getLessonById = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(400, 'Invalid lesson id')
+    }
+
+    const lessonDoc = await Lesson.findById(id)
+
+    if (!lessonDoc) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
+    const [courseDoc, moduleDoc] = await Promise.all([
+      Course.findById(lessonDoc.courseId),
+      Module.findById(lessonDoc.moduleId),
+    ])
+
+    return res.status(200).json({
+      ok: true,
+      data: formatLesson(lessonDoc, {
+        courseTitle: courseDoc?.title,
+        moduleTitle: moduleDoc?.title,
+      }),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const deleteCourseById = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(400, 'Invalid course id')
+    }
+
+    const course = await Course.findById(id)
+
+    if (!course) {
+      throw new AppError(404, 'Course not found')
+    }
+
+    const modules = await Module.find({ courseId: id }).lean()
+    const moduleIds = modules.map((moduleItem) => moduleItem._id)
+
+    await Promise.all([
+      Lesson.deleteMany({ courseId: id }),
+      Module.deleteMany({ courseId: id }),
+      Course.deleteOne({ _id: id }),
+    ])
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        deletedCourseId: id,
+        deletedModuleCount: moduleIds.length,
+      },
     })
   } catch (error) {
     return next(error)
@@ -59,4 +312,8 @@ const generateLessonContent = (req, res, next) => {
 module.exports = {
   generateCourseOutline,
   generateLessonContent,
+  getCourses,
+  getCourseById,
+  getLessonById,
+  deleteCourseById,
 }

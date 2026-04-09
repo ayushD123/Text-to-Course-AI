@@ -11,6 +11,7 @@ function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/courses" element={<HomePage />} />
         <Route path="/courses/:courseId" element={<CoursePage />} />
         <Route path="/lessons/:lessonId" element={<LessonPage />} />
         <Route path="*" element={<NotFoundPage />} />
