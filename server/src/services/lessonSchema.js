@@ -108,12 +108,11 @@ const normalizeContent = ({ content, videoQuery }) => {
 
       if (type === 'video') {
         const title = toCleanString(block?.title, 'Suggested video walkthrough')
-        const safeVideoQuery = encodeURIComponent(videoQuery)
         return {
           type: 'video',
           provider: 'youtube',
           title,
-          url: `https://www.youtube.com/results?search_query=${safeVideoQuery}`,
+          videoQuery,
         }
       }
 
@@ -135,7 +134,7 @@ const normalizeContent = ({ content, videoQuery }) => {
       type: 'video',
       provider: 'youtube',
       title: 'Suggested video walkthrough',
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(videoQuery)}`,
+      videoQuery,
     })
   }
 

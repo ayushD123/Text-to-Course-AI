@@ -4,6 +4,7 @@ const Course = require('../models/Course')
 const Module = require('../models/Module')
 const Lesson = require('../models/Lesson')
 const { generateCourseOutlineWithProvider, generateLessonContentWithProvider } = require('../services/aiProviderService')
+const { searchYoutubeVideos } = require('../services/youtubeService')
 const AppError = require('../utils/appError')
 
 const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
@@ -365,6 +366,23 @@ const deleteCourseById = async (req, res, next) => {
   }
 }
 
+const searchVideos = async (req, res, next) => {
+  try {
+    const query = req.query?.query
+    const results = await searchYoutubeVideos({ query })
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        query: String(query || '').trim(),
+        results,
+      },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 module.exports = {
   generateCourseOutline,
   generateLessonContent,
@@ -373,4 +391,5 @@ module.exports = {
   getCourseById,
   getLessonById,
   deleteCourseById,
+  searchVideos,
 }

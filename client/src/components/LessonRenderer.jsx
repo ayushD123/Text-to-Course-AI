@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react'
+
+import { getJson } from '../utils/apiClient'
+
 function HeadingBlock({ block }) {
   return <h3 className="text-xl font-semibold text-white">{block.text}</h3>
 }
@@ -17,14 +21,68 @@ function CodeBlock({ block }) {
   )
 }
 
-function VideoBlock({ block }) {
+function VideoBlock({ block, lessonVideoQuery }) {
+  const [videoResult, setVideoResult] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const query = (block.videoQuery || lessonVideoQuery || '').trim()
+
+  useEffect(() => {
+    const fetchVideo = async () => {
+      if (!query) {
+        setVideoResult(null)
+        setError('')
+        return
+      }
+
+      try {
+        setIsLoading(true)
+        setError('')
+
+        const response = await getJson(`/videos/search?query=${encodeURIComponent(query)}`)
+        const results = Array.isArray(response?.data?.results) ? response.data.results : []
+        setVideoResult(results[0] || null)
+      } catch (requestError) {
+        setError(requestError.message || 'Failed to load video')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchVideo()
+  }, [query])
+
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
-      <p className="text-sm font-medium text-white">Video Placeholder</p>
+      <p className="text-sm font-medium text-white">Video</p>
       <p className="mt-1 text-sm text-slate-300">{block.title || 'Suggested video resource'}</p>
-      <a className="mt-2 inline-block text-xs text-indigo-300 underline" href={block.url} target="_blank" rel="noreferrer">
-        Open video link
-      </a>
+
+      {isLoading && <p className="mt-3 text-xs text-slate-400">Loading video...</p>}
+
+      {!isLoading && error && <p className="mt-3 text-xs text-rose-300">{error}</p>}
+
+      {!isLoading && !error && !videoResult && <p className="mt-3 text-xs text-slate-400">No video found for this lesson yet.</p>}
+
+      {!isLoading && !error && videoResult && (
+        <div className="mt-3 space-y-2">
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            <iframe
+              title={videoResult.title}
+              src={videoResult.embedUrl}
+              className="h-56 w-full"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+          <p className="text-sm text-slate-200">{videoResult.title}</p>
+          {videoResult.channelTitle ? <p className="text-xs text-slate-400">Channel: {videoResult.channelTitle}</p> : null}
+          <a className="inline-block text-xs text-indigo-300 underline" href={videoResult.watchUrl} target="_blank" rel="noreferrer">
+            Open on YouTube
+          </a>
+        </div>
+      )}
     </div>
   )
 }
@@ -51,13 +109,13 @@ function QuizSection({ mcqs = [] }) {
   )
 }
 
-function renderBlock(block, index) {
+function renderBlock(block, index, lessonVideoQuery) {
   const key = `${block.type}-${index}`
 
   if (block.type === 'heading') return <HeadingBlock key={key} block={block} />
   if (block.type === 'paragraph') return <ParagraphBlock key={key} block={block} />
   if (block.type === 'code') return <CodeBlock key={key} block={block} />
-  if (block.type === 'video') return <VideoBlock key={key} block={block} />
+  if (block.type === 'video') return <VideoBlock key={key} block={block} lessonVideoQuery={lessonVideoQuery} />
   if (block.type === 'mcq') return null
 
   return null
@@ -75,7 +133,7 @@ function LessonRenderer({ lesson }) {
         </ul>
       </header>
 
-      <section className="space-y-4">{lesson.content.map(renderBlock)}</section>
+      <section className="space-y-4">{lesson.content.map((block, index) => renderBlock(block, index, lesson.videoQuery))}</section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <h4 className="text-lg font-semibold text-white">Readings</h4>

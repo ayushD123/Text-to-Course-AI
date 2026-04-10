@@ -47,6 +47,8 @@ MONGO_URI=mongodb://127.0.0.1:27017/text_to_learn
   - `groq`: uses Groq via official Node SDK (`groq-sdk`)
 - `GROQ_API_KEY` is required only when `GENERATION_PROVIDER=groq`.
 - `GROQ_MODEL` is optional (default: `llama-3.3-70b-versatile`).
+- `YOUTUBE_API_KEY` is required for lesson video enrichment (`GET /api/videos/search`).
+- `YOUTUBE_CACHE_TTL_MS` controls in-memory cache duration for repeated video searches (default `600000`).
 
 Example:
 
@@ -54,6 +56,8 @@ Example:
 GENERATION_PROVIDER=mock
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
+YOUTUBE_API_KEY=
+YOUTUBE_CACHE_TTL_MS=600000
 ```
 
 Notes:
@@ -69,6 +73,7 @@ Notes:
 - `POST /api/courses/generate-outline`
 - `GET /api/lessons/:id`
 - `POST /api/lessons/generate`
+- `GET /api/videos/search?query=...`
 
 Response:
 
@@ -145,10 +150,11 @@ Response (shape):
       { "type": "heading", "text": "..." },
       { "type": "paragraph", "text": "..." },
       { "type": "code", "language": "javascript", "code": "..." },
-      { "type": "video", "provider": "youtube", "title": "...", "url": "..." },
+      { "type": "video", "provider": "youtube", "title": "...", "videoQuery": "..." },
       { "type": "mcq", "text": "..." }
     ],
     "readings": ["..."],
+    "videoQuery": "...",
     "mcqs": [
       {
         "question": "...",
@@ -172,6 +178,10 @@ Returns a single course with nested modules and lesson stubs/generated lesson st
 ### GET /api/lessons/:id
 
 Returns one lesson by id, including generated content if already generated.
+
+### GET /api/videos/search?query=...
+
+Searches YouTube from the backend (API key stays server-side) and returns the top 1-3 embeddable educational videos for the query. Repeated identical queries are served from a simple in-memory cache.
 
 Error response (for validation issues):
 
