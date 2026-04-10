@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ErrorMessage from '../components/ErrorMessage'
@@ -7,6 +7,37 @@ import PromptForm from '../components/PromptForm'
 import { getJson, postJson } from '../utils/apiClient'
 import { buildCoursePath } from '../utils/routeHelpers'
 import { getLatestCourse, removeLatestCourse, saveLatestCourse } from '../utils/storage'
+
+const OUTLINE_LOADING_MESSAGES = [
+  'Cooking up a course so good, even the syllabus is excited...',
+  'Summoning lesson plans from the academic void...',
+  'Turning your idea into chapters, coffee not included...',
+  'Polishing the outline until it looks suspiciously intelligent...',
+  'Convincing the backend to become a professor...',
+  'Generating knowledge packets at mildly dramatic speed...',
+  'Assembling modules, objectives, and a tiny bit of magic...',
+  'Teaching the AI to teach, one section at a time...',
+  'Building your course like a LEGO set for learning...',
+  'Organizing chaos into a respectable curriculum...',
+  'Please wait while we pretend this was instant...',
+  'Giving your topic the full professor treatment...',
+  'Fine-tuning the curriculum to perfection...',
+  'Preparing your course for academic excellence...',
+  'Drafting lessons faster than a last-minute student panic...',
+  'Training tiny invisible professors behind the screen...',
+  
+]
+
+const getNextRandomIndex = (currentIndex, total) => {
+  if (total <= 1) return 0
+
+  let nextIndex = currentIndex
+  while (nextIndex === currentIndex) {
+    nextIndex = Math.floor(Math.random() * total)
+  }
+
+  return nextIndex
+}
 
 function HomePage() {
   const navigate = useNavigate()
@@ -19,6 +50,7 @@ function HomePage() {
   const [uiNotice, setUiNotice] = useState('')
   const [courses, setCourses] = useState([])
   const [latestCourse, setLatestCourse] = useState(() => getLatestCourse())
+  const [outlineLoadingMessage, setOutlineLoadingMessage] = useState(OUTLINE_LOADING_MESSAGES[0])
 
   const section = searchParams.get('section')
   const visibleCourses = courses.filter((course) => course.id !== latestCourse?.id)
@@ -75,6 +107,26 @@ function HomePage() {
     setSearchParams(params, { replace: true })
   }, [section, isCoursesLoading, courses.length, searchParams, setSearchParams])
 
+  useEffect(() => {
+    if (!isLoading) {
+      setOutlineLoadingMessage(OUTLINE_LOADING_MESSAGES[0])
+      return
+    }
+
+    const intervalId = setInterval(() => {
+      setOutlineLoadingMessage((currentMessage) => {
+        const currentIndex = OUTLINE_LOADING_MESSAGES.indexOf(currentMessage)
+        const safeCurrentIndex = currentIndex === -1 ? 0 : currentIndex
+        const nextIndex = getNextRandomIndex(safeCurrentIndex, OUTLINE_LOADING_MESSAGES.length)
+        return OUTLINE_LOADING_MESSAGES[nextIndex]
+      })
+    }, 1700)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isLoading])
+
   const handleGenerate = async (topic) => {
     if (!topic) {
       setError('Please enter a topic before generating a course outline.')
@@ -116,7 +168,7 @@ function HomePage() {
         <PromptForm onSubmit={handleGenerate} isLoading={isLoading} />
         {isLoading && (
           <div className="mt-4">
-            <LoadingSpinner label="Generating outline from mock backend..." />
+            <LoadingSpinner label={outlineLoadingMessage} />
           </div>
         )}
         {error && (

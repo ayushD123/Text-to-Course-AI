@@ -40,6 +40,27 @@ Initial MERN monorepo scaffold for the hackathon project.
 MONGO_URI=mongodb://127.0.0.1:27017/text_to_learn
 ```
 
+### Outline generation provider
+
+- `GENERATION_PROVIDER` controls course outline generation provider:
+  - `mock` (default): deterministic local mock generator
+  - `groq`: uses Groq via official Node SDK (`groq-sdk`)
+- `GROQ_API_KEY` is required only when `GENERATION_PROVIDER=groq`.
+- `GROQ_MODEL` is optional (default: `llama-3.3-70b-versatile`).
+
+Example:
+
+```env
+GENERATION_PROVIDER=mock
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+Notes:
+
+- Lesson generation (`POST /api/lessons/generate`) remains on the existing mock generator in this step.
+- If Groq returns malformed JSON, the server does one repair attempt, then returns a clean API error.
+
 ## API
 
 - `GET /api/health`

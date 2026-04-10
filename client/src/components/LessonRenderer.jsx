@@ -29,10 +29,6 @@ function VideoBlock({ block }) {
   )
 }
 
-function McqHintBlock({ block }) {
-  return <p className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">{block.text}</p>
-}
-
 function QuizSection({ mcqs = [] }) {
   return (
     <section className="space-y-4">
@@ -62,7 +58,7 @@ function renderBlock(block, index) {
   if (block.type === 'paragraph') return <ParagraphBlock key={key} block={block} />
   if (block.type === 'code') return <CodeBlock key={key} block={block} />
   if (block.type === 'video') return <VideoBlock key={key} block={block} />
-  if (block.type === 'mcq') return <McqHintBlock key={key} block={block} />
+  if (block.type === 'mcq') return null
 
   return null
 }

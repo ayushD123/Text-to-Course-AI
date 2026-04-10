@@ -55,7 +55,7 @@ function LessonPage() {
         ← Back
       </button>
 
-      {isLoading && <LoadingSpinner label="Generating lesson from mock backend..." />}
+      {isLoading && <LoadingSpinner label="Generating lesson content..." />}
       {error && <ErrorMessage message={error} />}
       {!isLoading && !error && lesson && <LessonRenderer lesson={lesson} />}
     </section>

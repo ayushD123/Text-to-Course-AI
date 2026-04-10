@@ -28,6 +28,11 @@ const lessonSchema = new mongoose.Schema(
       enum: ['stub', 'generated'],
       default: 'stub',
     },
+    generationStatus: {
+      type: String,
+      enum: ['idle', 'in_progress', 'failed', 'succeeded'],
+      default: 'idle',
+    },
     objectives: {
       type: [String],
       default: [],
@@ -39,6 +44,11 @@ const lessonSchema = new mongoose.Schema(
     readings: {
       type: [String],
       default: [],
+    },
+    videoQuery: {
+      type: String,
+      default: '',
+      trim: true,
     },
     mcqs: {
       type: [mongoose.Schema.Types.Mixed],

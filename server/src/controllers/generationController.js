@@ -3,7 +3,7 @@ const mongoose = require('mongoose')
 const Course = require('../models/Course')
 const Module = require('../models/Module')
 const Lesson = require('../models/Lesson')
-const { generateOutline, generateLesson } = require('../services/mockGeneratorService')
+const { generateCourseOutlineWithProvider, generateLessonContentWithProvider } = require('../services/aiProviderService')
 const AppError = require('../utils/appError')
 
 const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
@@ -13,9 +13,11 @@ const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
   title: lessonDoc.title,
   order: lessonDoc.order,
   status: lessonDoc.status,
+  generationStatus: lessonDoc.generationStatus,
   objectives: lessonDoc.objectives,
   content: lessonDoc.content,
   readings: lessonDoc.readings,
+  videoQuery: lessonDoc.videoQuery,
   mcqs: lessonDoc.mcqs,
   courseTitle,
   moduleTitle,
@@ -31,7 +33,7 @@ const generateCourseOutline = async (req, res, next) => {
       throw new AppError(400, 'Invalid request body', ['topic is required and must be a non-empty string'])
     }
 
-    const outline = generateOutline(topic)
+    const outline = await generateCourseOutlineWithProvider({ topic: topic.trim() })
 
     const courseDoc = await Course.create({
       topic: topic.trim(),
@@ -92,58 +94,70 @@ const generateCourseOutline = async (req, res, next) => {
   }
 }
 
-const generateLessonContent = async (req, res, next) => {
+const parseLessonIdFromRequest = (req) => {
+  const lessonIdFromBody = req.body?.lessonId
+  const lessonIdFromParams = req.params?.id
+  const lessonId = lessonIdFromBody || lessonIdFromParams
+
+  if (typeof lessonId !== 'string' || !lessonId.trim()) {
+    throw new AppError(400, 'Invalid request body', ['lessonId is required and must be a non-empty string'])
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(lessonId)) {
+    throw new AppError(400, 'Invalid request body', ['lessonId must be a valid MongoDB ObjectId'])
+  }
+
+  return lessonId.trim()
+}
+
+const generateLessonContentInternal = async ({ lessonId, forceRegenerate = false }) => {
+  const lessonDoc = await Lesson.findById(lessonId)
+
+  if (!lessonDoc) {
+    throw new AppError(404, 'Lesson not found')
+  }
+
+  const [courseDoc, moduleDoc] = await Promise.all([Course.findById(lessonDoc.courseId), Module.findById(lessonDoc.moduleId)])
+
+  if (!courseDoc || !moduleDoc) {
+    throw new AppError(404, 'Associated course/module not found for lesson')
+  }
+
+  if (!forceRegenerate && lessonDoc.status === 'generated' && Array.isArray(lessonDoc.content) && lessonDoc.content.length > 0) {
+    return {
+      lessonDoc,
+      courseDoc,
+      moduleDoc,
+    }
+  }
+
+  await Lesson.findByIdAndUpdate(lessonId, {
+    $set: {
+      generationStatus: 'in_progress',
+    },
+  })
+
   try {
-    const { lessonId } = req.body || {}
-
-    if (typeof lessonId !== 'string' || !lessonId.trim()) {
-      throw new AppError(400, 'Invalid request body', ['lessonId is required and must be a non-empty string'])
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(lessonId)) {
-      throw new AppError(400, 'Invalid request body', ['lessonId must be a valid MongoDB ObjectId'])
-    }
-
-    const lessonDoc = await Lesson.findById(lessonId)
-
-    if (!lessonDoc) {
-      throw new AppError(404, 'Lesson not found')
-    }
-
-    const [courseDoc, moduleDoc] = await Promise.all([
-      Course.findById(lessonDoc.courseId),
-      Module.findById(lessonDoc.moduleId),
-    ])
-
-    if (!courseDoc || !moduleDoc) {
-      throw new AppError(404, 'Associated course/module not found for lesson')
-    }
-
-    if (lessonDoc.status === 'generated' && Array.isArray(lessonDoc.content) && lessonDoc.content.length > 0) {
-      return res.status(200).json({
-        ok: true,
-        data: formatLesson(lessonDoc, {
-          courseTitle: courseDoc.title,
-          moduleTitle: moduleDoc.title,
-        }),
-      })
-    }
-
-    const lesson = generateLesson({
-      courseTitle: courseDoc.title,
-      moduleTitle: moduleDoc.title,
-      lessonTitle: lessonDoc.title,
+    const lessonPayload = await generateLessonContentWithProvider({
+      context: {
+        courseTitle: courseDoc.title,
+        moduleTitle: moduleDoc.title,
+        lessonTitle: lessonDoc.title,
+      },
     })
 
     const updatedLesson = await Lesson.findByIdAndUpdate(
       lessonId,
       {
         $set: {
-          objectives: lesson.objectives,
-          content: lesson.content,
-          readings: lesson.readings,
-          mcqs: lesson.mcqs,
+          title: lessonPayload.title,
+          objectives: lessonPayload.objectives,
+          content: lessonPayload.content,
+          readings: lessonPayload.readings,
+          videoQuery: lessonPayload.videoQuery,
+          mcqs: lessonPayload.mcqs,
           status: 'generated',
+          generationStatus: 'succeeded',
         },
       },
       {
@@ -156,11 +170,53 @@ const generateLessonContent = async (req, res, next) => {
       throw new AppError(404, 'Lesson not found during update')
     }
 
+    return {
+      lessonDoc: updatedLesson,
+      courseDoc,
+      moduleDoc,
+    }
+  } catch (error) {
+    await Lesson.findByIdAndUpdate(lessonId, {
+      $set: {
+        generationStatus: 'failed',
+      },
+    })
+
+    if (error instanceof AppError) {
+      throw error
+    }
+
+    throw new AppError(502, 'Failed to generate lesson content. Please try again.')
+  }
+}
+
+const generateLessonContent = async (req, res, next) => {
+  try {
+    const lessonId = parseLessonIdFromRequest(req)
+    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: false })
+
     return res.status(200).json({
       ok: true,
-      data: formatLesson(updatedLesson, {
-        courseTitle: courseDoc.title,
-        moduleTitle: moduleDoc.title,
+      data: formatLesson(result.lessonDoc, {
+        courseTitle: result.courseDoc.title,
+        moduleTitle: result.moduleDoc.title,
+      }),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const regenerateLessonContent = async (req, res, next) => {
+  try {
+    const lessonId = parseLessonIdFromRequest(req)
+    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: true })
+
+    return res.status(200).json({
+      ok: true,
+      data: formatLesson(result.lessonDoc, {
+        courseTitle: result.courseDoc.title,
+        moduleTitle: result.moduleDoc.title,
       }),
     })
   } catch (error) {
@@ -312,6 +368,7 @@ const deleteCourseById = async (req, res, next) => {
 module.exports = {
   generateCourseOutline,
   generateLessonContent,
+  regenerateLessonContent,
   getCourses,
   getCourseById,
   getLessonById,

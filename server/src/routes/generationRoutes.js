@@ -3,6 +3,7 @@ const express = require('express')
 const {
   generateCourseOutline,
   generateLessonContent,
+  regenerateLessonContent,
   getCourses,
   getCourseById,
   getLessonById,
@@ -18,5 +19,6 @@ generationRouter.post('/courses/generate-outline', generateCourseOutline)
 
 generationRouter.get('/lessons/:id', getLessonById)
 generationRouter.post('/lessons/generate', generateLessonContent)
+generationRouter.post('/lessons/:id/regenerate', regenerateLessonContent)
 
 module.exports = generationRouter
