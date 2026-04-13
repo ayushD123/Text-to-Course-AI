@@ -21,6 +21,15 @@ const courseSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    ownerId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    isPrivate: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

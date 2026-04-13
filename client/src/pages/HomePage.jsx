@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAuth0 } from '@auth0/auth0-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ErrorMessage from '../components/ErrorMessage'
@@ -40,6 +41,7 @@ const getNextRandomIndex = (currentIndex, total) => {
 }
 
 function HomePage() {
+  const { isAuthenticated, getAccessTokenSilently } = useAuth0()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const savedCoursesRef = useRef(null)
@@ -61,7 +63,21 @@ function HomePage() {
         setIsCoursesLoading(true)
         setCoursesError('')
 
-        const response = await getJson('/courses')
+        if (!isAuthenticated) {
+          setCourses([])
+          setLatestCourse(null)
+          removeLatestCourse()
+          return
+        }
+
+        let accessToken = ''
+        try {
+          accessToken = await getAccessTokenSilently()
+        } catch {
+          accessToken = ''
+        }
+
+        const response = await getJson('/courses', { accessToken })
         const loadedCourses = response.data || []
 
         setCourses(loadedCourses)
@@ -88,7 +104,7 @@ function HomePage() {
     }
 
     loadCourses()
-  }, [])
+  }, [isAuthenticated, getAccessTokenSilently])
 
   useEffect(() => {
     if (section !== 'courses' || isCoursesLoading) {
@@ -129,7 +145,12 @@ function HomePage() {
 
   const handleGenerate = async (topic) => {
     if (!topic) {
-      setError('Please enter a topic before generating a course outline.')
+      setError('Please enter a topic before generating a personalised course .')
+      return
+    }
+
+    if (!isAuthenticated) {
+      setError('Please login to generate and save your courses.')
       return
     }
 
@@ -137,7 +158,14 @@ function HomePage() {
       setIsLoading(true)
       setError('')
 
-      const response = await postJson('/courses/generate-outline', { topic })
+      let accessToken = ''
+      try {
+        accessToken = await getAccessTokenSilently()
+      } catch {
+        accessToken = ''
+      }
+
+      const response = await postJson('/courses/generate-outline', { topic }, { accessToken })
       const course = response.data
 
       saveLatestCourse(course)
@@ -160,7 +188,7 @@ function HomePage() {
       <header className="space-y-2">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">Create your next learning path</h2>
         <p className="max-w-2xl text-sm text-slate-300 sm:text-base">
-          Describe what you want to learn and generate a structured course outline.
+          Describe what you want to learn and we will generate a structured course for you.
         </p>
       </header>
 
@@ -183,7 +211,10 @@ function HomePage() {
       )}
 
       <div ref={savedCoursesRef} className="rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-        <h3 className="text-lg font-semibold text-white">Saved Courses</h3>
+        <h3 className="text-lg font-semibold text-white">Recent Courses</h3>
+        {!isAuthenticated && !isCoursesLoading && (
+          <p className="mt-3 text-sm text-slate-400">Login to save your courses.</p>
+        )}
         {isCoursesLoading && (
           <div className="mt-3">
             <LoadingSpinner label="Loading saved courses..." />
@@ -212,7 +243,7 @@ function HomePage() {
               {course.title}
             </Link>
           ))}
-          {!isCoursesLoading && !coursesError && visibleCourses.length === 0 && !latestCourse?.title && (
+          {isAuthenticated && !isCoursesLoading && !coursesError && visibleCourses.length === 0 && !latestCourse?.title && (
             <p className="text-sm text-slate-400">No saved courses yet. Generate your first one above.</p>
           )}
         </div>

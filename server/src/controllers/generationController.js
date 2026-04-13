@@ -5,6 +5,7 @@ const Module = require('../models/Module')
 const Lesson = require('../models/Lesson')
 const { generateCourseOutlineWithProvider, generateLessonContentWithProvider } = require('../services/aiProviderService')
 const { searchYoutubeVideos } = require('../services/youtubeService')
+const { getAuthUserId } = require('../middlewares/auth0')
 const AppError = require('../utils/appError')
 
 const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
@@ -26,9 +27,22 @@ const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
   updatedAt: lessonDoc.updatedAt,
 })
 
+const formatCourse = (courseDoc) => ({
+  id: String(courseDoc._id),
+  topic: courseDoc.topic,
+  title: courseDoc.title,
+  description: courseDoc.description,
+  tags: courseDoc.tags,
+  ownerId: courseDoc.ownerId || null,
+  isPrivate: Boolean(courseDoc.isPrivate),
+  createdAt: courseDoc.createdAt,
+  updatedAt: courseDoc.updatedAt,
+})
+
 const generateCourseOutline = async (req, res, next) => {
   try {
     const { topic } = req.body || {}
+    const authUserId = getAuthUserId(req)
 
     if (typeof topic !== 'string' || !topic.trim()) {
       throw new AppError(400, 'Invalid request body', ['topic is required and must be a non-empty string'])
@@ -41,6 +55,8 @@ const generateCourseOutline = async (req, res, next) => {
       title: outline.title,
       description: outline.description,
       tags: outline.tags,
+      ownerId: authUserId || null,
+      isPrivate: Boolean(authUserId),
     })
 
     const modules = []
@@ -80,14 +96,8 @@ const generateCourseOutline = async (req, res, next) => {
     return res.status(201).json({
       ok: true,
       data: {
-        id: String(courseDoc._id),
-        topic: courseDoc.topic,
-        title: courseDoc.title,
-        description: courseDoc.description,
-        tags: courseDoc.tags,
+        ...formatCourse(courseDoc),
         modules,
-        createdAt: courseDoc.createdAt,
-        updatedAt: courseDoc.updatedAt,
       },
     })
   } catch (error) {
@@ -111,7 +121,7 @@ const parseLessonIdFromRequest = (req) => {
   return lessonId.trim()
 }
 
-const generateLessonContentInternal = async ({ lessonId, forceRegenerate = false }) => {
+const generateLessonContentInternal = async ({ lessonId, forceRegenerate = false, authUserId = '' }) => {
   const lessonDoc = await Lesson.findById(lessonId)
 
   if (!lessonDoc) {
@@ -122,6 +132,13 @@ const generateLessonContentInternal = async ({ lessonId, forceRegenerate = false
 
   if (!courseDoc || !moduleDoc) {
     throw new AppError(404, 'Associated course/module not found for lesson')
+  }
+
+  const isPrivateCourse = Boolean(courseDoc.isPrivate)
+  const isOwner = Boolean(authUserId && courseDoc.ownerId === authUserId)
+
+  if (isPrivateCourse && !isOwner) {
+    throw new AppError(404, 'Lesson not found')
   }
 
   if (!forceRegenerate && lessonDoc.status === 'generated' && Array.isArray(lessonDoc.content) && lessonDoc.content.length > 0) {
@@ -194,7 +211,8 @@ const generateLessonContentInternal = async ({ lessonId, forceRegenerate = false
 const generateLessonContent = async (req, res, next) => {
   try {
     const lessonId = parseLessonIdFromRequest(req)
-    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: false })
+    const authUserId = getAuthUserId(req)
+    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: false, authUserId })
 
     return res.status(200).json({
       ok: true,
@@ -211,7 +229,8 @@ const generateLessonContent = async (req, res, next) => {
 const regenerateLessonContent = async (req, res, next) => {
   try {
     const lessonId = parseLessonIdFromRequest(req)
-    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: true })
+    const authUserId = getAuthUserId(req)
+    const result = await generateLessonContentInternal({ lessonId, forceRegenerate: true, authUserId })
 
     return res.status(200).json({
       ok: true,
@@ -227,19 +246,18 @@ const regenerateLessonContent = async (req, res, next) => {
 
 const getCourses = async (req, res, next) => {
   try {
-    const courses = await Course.find().sort({ createdAt: -1 }).lean()
+    const authUserId = getAuthUserId(req)
+    const visibilityFilter = authUserId
+      ? {
+          $or: [{ isPrivate: false }, { ownerId: authUserId }],
+        }
+      : { isPrivate: false }
+
+    const courses = await Course.find(visibilityFilter).sort({ createdAt: -1 }).lean()
 
     return res.status(200).json({
       ok: true,
-      data: courses.map((course) => ({
-        id: String(course._id),
-        topic: course.topic,
-        title: course.title,
-        description: course.description,
-        tags: course.tags,
-        createdAt: course.createdAt,
-        updatedAt: course.updatedAt,
-      })),
+      data: courses.map((course) => formatCourse(course)),
     })
   } catch (error) {
     return next(error)
@@ -257,6 +275,14 @@ const getCourseById = async (req, res, next) => {
     const course = await Course.findById(id).lean()
 
     if (!course) {
+      throw new AppError(404, 'Course not found')
+    }
+
+    const authUserId = getAuthUserId(req)
+    const isPrivateCourse = Boolean(course.isPrivate)
+    const isOwner = Boolean(authUserId && course.ownerId === authUserId)
+
+    if (isPrivateCourse && !isOwner) {
       throw new AppError(404, 'Course not found')
     }
 
@@ -280,13 +306,7 @@ const getCourseById = async (req, res, next) => {
     return res.status(200).json({
       ok: true,
       data: {
-        id: String(course._id),
-        topic: course.topic,
-        title: course.title,
-        description: course.description,
-        tags: course.tags,
-        createdAt: course.createdAt,
-        updatedAt: course.updatedAt,
+        ...formatCourse(course),
         modules: modules.map((moduleItem) => ({
           id: String(moduleItem._id),
           title: moduleItem.title,
@@ -319,6 +339,14 @@ const getLessonById = async (req, res, next) => {
       Module.findById(lessonDoc.moduleId),
     ])
 
+    const authUserId = getAuthUserId(req)
+    const isPrivateCourse = Boolean(courseDoc?.isPrivate)
+    const isOwner = Boolean(authUserId && courseDoc?.ownerId === authUserId)
+
+    if (isPrivateCourse && !isOwner) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
     return res.status(200).json({
       ok: true,
       data: formatLesson(lessonDoc, {
@@ -345,6 +373,11 @@ const deleteCourseById = async (req, res, next) => {
       throw new AppError(404, 'Course not found')
     }
 
+    const authUserId = getAuthUserId(req)
+    if (course.ownerId && course.ownerId !== authUserId) {
+      throw new AppError(403, 'Not allowed to delete this course')
+    }
+
     const modules = await Module.find({ courseId: id }).lean()
     const moduleIds = modules.map((moduleItem) => moduleItem._id)
 
@@ -360,6 +393,63 @@ const deleteCourseById = async (req, res, next) => {
         deletedCourseId: id,
         deletedModuleCount: moduleIds.length,
       },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const claimCourseForUser = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const authUserId = getAuthUserId(req)
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(400, 'Invalid course id')
+    }
+
+    if (!authUserId) {
+      throw new AppError(401, 'Authentication required')
+    }
+
+    const course = await Course.findById(id)
+
+    if (!course) {
+      throw new AppError(404, 'Course not found')
+    }
+
+    if (course.ownerId && course.ownerId !== authUserId) {
+      throw new AppError(409, 'Course already claimed by another user')
+    }
+
+    if (!course.ownerId) {
+      course.ownerId = authUserId
+      course.isPrivate = true
+      await course.save()
+    }
+
+    return res.status(200).json({
+      ok: true,
+      data: formatCourse(course),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+const getMyCourses = async (req, res, next) => {
+  try {
+    const authUserId = getAuthUserId(req)
+
+    if (!authUserId) {
+      throw new AppError(401, 'Authentication required')
+    }
+
+    const courses = await Course.find({ ownerId: authUserId }).sort({ createdAt: -1 }).lean()
+
+    return res.status(200).json({
+      ok: true,
+      data: courses.map((course) => formatCourse(course)),
     })
   } catch (error) {
     return next(error)
@@ -391,5 +481,7 @@ module.exports = {
   getCourseById,
   getLessonById,
   deleteCourseById,
+  claimCourseForUser,
+  getMyCourses,
   searchVideos,
 }

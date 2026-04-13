@@ -9,9 +9,26 @@ const parseError = async (response) => {
   }
 }
 
-export const getJson = async (path) => {
+const buildHeaders = ({ accessToken, hasBody = false } = {}) => {
+  const headers = {}
+
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json'
+  }
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
+  }
+
+  return headers
+}
+
+export const getJson = async (path, options = {}) => {
+  const { accessToken } = options
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     cache: 'no-store',
+    headers: buildHeaders({ accessToken }),
   })
 
   if (!response.ok) {
@@ -21,10 +38,12 @@ export const getJson = async (path) => {
   return response.json()
 }
 
-export const postJson = async (path, body) => {
+export const postJson = async (path, body, options = {}) => {
+  const { accessToken } = options
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders({ accessToken, hasBody: true }),
     body: JSON.stringify(body),
   })
 
@@ -35,9 +54,12 @@ export const postJson = async (path, body) => {
   return response.json()
 }
 
-export const deleteJson = async (path) => {
+export const deleteJson = async (path, options = {}) => {
+  const { accessToken } = options
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'DELETE',
+    headers: buildHeaders({ accessToken }),
   })
 
   if (!response.ok) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth0 } from '@auth0/auth0-react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import ErrorMessage from '../components/ErrorMessage'
@@ -40,6 +41,7 @@ const getNextRandomIndex = (currentIndex, total) => {
 }
 
 function LessonPage() {
+  const { isAuthenticated, getAccessTokenSilently } = useAuth0()
   const { lessonId } = useParams()
   const navigate = useNavigate()
   const [lesson, setLesson] = useState(() => getLessonCache(lessonId))
@@ -73,7 +75,16 @@ function LessonPage() {
         setIsLoading(true)
         setError('')
 
-        const currentLessonResponse = await getJson(`/lessons/${lessonId}`)
+        let accessToken = ''
+        if (isAuthenticated) {
+          try {
+            accessToken = await getAccessTokenSilently()
+          } catch {
+            accessToken = ''
+          }
+        }
+
+        const currentLessonResponse = await getJson(`/lessons/${lessonId}`, { accessToken })
         const currentLesson = currentLessonResponse.data
 
         if (currentLesson.status === 'generated') {
@@ -84,7 +95,7 @@ function LessonPage() {
 
         const generatedResponse = await postJson('/lessons/generate', {
           lessonId,
-        })
+        }, { accessToken })
 
         setLesson(generatedResponse.data)
         saveLessonCache(lessonId, generatedResponse.data)
@@ -96,7 +107,7 @@ function LessonPage() {
     }
 
     fetchLesson()
-  }, [lessonId])
+  }, [lessonId, isAuthenticated, getAccessTokenSilently])
 
   return (
     <section className="space-y-4">

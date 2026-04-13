@@ -8,15 +8,22 @@ const {
   getCourseById,
   getLessonById,
   deleteCourseById,
+  claimCourseForUser,
+  getMyCourses,
   searchVideos,
 } = require('../controllers/generationController')
+const { optionalAuth, requireAuth } = require('../middlewares/auth0')
 
 const generationRouter = express.Router()
+
+generationRouter.use(optionalAuth)
 
 generationRouter.get('/courses', getCourses)
 generationRouter.get('/courses/:id', getCourseById)
 generationRouter.delete('/courses/:id', deleteCourseById)
-generationRouter.post('/courses/generate-outline', generateCourseOutline)
+generationRouter.post('/courses/:id/claim', requireAuth, claimCourseForUser)
+generationRouter.post('/courses/generate-outline', requireAuth, generateCourseOutline)
+generationRouter.get('/me/courses', requireAuth, getMyCourses)
 generationRouter.get('/videos/search', searchVideos)
 
 generationRouter.get('/lessons/:id', getLessonById)

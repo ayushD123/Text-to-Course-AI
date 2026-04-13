@@ -1,6 +1,26 @@
 const AppError = require('../utils/appError')
 
 const errorHandler = (err, req, res, next) => {
+  if (err?.status === 401 || err?.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      ok: false,
+      error: {
+        message: 'Unauthorized',
+        details: [err.message || 'Missing or invalid token'],
+      },
+    })
+  }
+
+  if (err?.status === 403 || err?.code === 'invalid_token') {
+    return res.status(403).json({
+      ok: false,
+      error: {
+        message: 'Forbidden',
+        details: [err.message || 'You are not allowed to perform this action'],
+      },
+    })
+  }
+
   if (err?.name === 'ValidationError') {
     return res.status(400).json({
       ok: false,
