@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import ErrorMessage from '../components/ErrorMessage'
+import LessonPDFExporter from '../components/LessonPDFExporter'
 import LessonRenderer from '../components/LessonRenderer'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getJson, postJson } from '../utils/apiClient'
@@ -220,7 +221,7 @@ function LessonPage() {
         const nextIndex = getNextRandomIndex(safeCurrentIndex, AUDIO_LOADING_MESSAGES.length)
         return AUDIO_LOADING_MESSAGES[nextIndex]
       })
-    }, 1300)
+    }, 2000)
 
     return () => {
       clearInterval(intervalId)
@@ -279,6 +280,10 @@ function LessonPage() {
 
   const englishExplanation = getEnglishExplanation(lesson)
   const hinglishExplanation = (lesson?.hinglishExplanation || '').trim()
+  const visibleExplanationHeading = explanationMode === 'hinglish' ? 'Lesson Explanation (Hinglish)' : 'Lesson Explanation (English)'
+  const visibleExplanationText = explanationMode === 'hinglish'
+    ? (hinglishExplanation || 'Hinglish explanation is not available yet.')
+    : (englishExplanation || 'English explanation is not available yet.')
 
   return (
     <section className="space-y-4">
@@ -294,6 +299,12 @@ function LessonPage() {
       {error && <ErrorMessage message={error} />}
       {!isLoading && !error && lesson && (
         <div className="space-y-4">
+          <LessonPDFExporter
+            lesson={lesson}
+            explanationHeading={visibleExplanationHeading}
+            explanationText={visibleExplanationText}
+          />
+
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-white">Lesson Explanation</h3>
