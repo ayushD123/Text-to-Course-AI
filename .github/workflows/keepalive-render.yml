@@ -1,0 +1,24 @@
+name: Keep Render Backend Awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping backend health endpoint
+        env:
+          RENDER_HEALTHCHECK_URL: ${{ secrets.RENDER_HEALTHCHECK_URL }}
+        run: |
+          if [ -z "$RENDER_HEALTHCHECK_URL" ]; then
+            echo "Missing RENDER_HEALTHCHECK_URL secret"
+            exit 1
+          fi
+
+          echo "Pinging $RENDER_HEALTHCHECK_URL"
+          curl --fail --silent --show-error --max-time 30 "$RENDER_HEALTHCHECK_URL"
+          echo "Keepalive ping successful"

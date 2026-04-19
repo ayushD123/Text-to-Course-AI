@@ -195,6 +195,30 @@ On push/PR, CI runs:
 2. client build
 3. server basic checks
 
+## Keep Render Free Tier Warm (Optional)
+
+Render free web services can sleep after inactivity. To reduce cold starts, this repo includes:
+
+- `.github/workflows/keepalive-render.yml`
+
+It pings your backend health endpoint every 10 minutes.
+
+### Setup
+
+1. Go to GitHub repo -> **Settings** -> **Secrets and variables** -> **Actions**.
+2. Click **New repository secret**.
+3. Add:
+   - Name: `RENDER_HEALTHCHECK_URL`
+   - Value: `https://text-to-course-ai.onrender.com/api/health` (replace with your backend URL if different)
+4. Commit/push workflow file to `main`.
+5. Go to **Actions** tab -> **Keep Render Backend Awake**.
+6. Click **Run workflow** once manually to verify.
+
+### Notes
+
+- This is best-effort and should not be treated as an official SLA on free tier.
+- If you need guaranteed no-sleep behavior, use a paid Render plan.
+
 ## Final Sanity Checklist (Pre-handoff)
 
 - [ ] `client/.env` configured with valid Auth0 + API URL
