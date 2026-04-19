@@ -4,6 +4,7 @@ const {
   generateCourseOutline,
   generateLessonContent,
   regenerateLessonContent,
+  generateLessonHinglishExplanation,
   getCourses,
   getCourseById,
   getLessonById,
@@ -29,5 +30,6 @@ generationRouter.get('/videos/search', searchVideos)
 generationRouter.get('/lessons/:id', getLessonById)
 generationRouter.post('/lessons/generate', generateLessonContent)
 generationRouter.post('/lessons/:id/regenerate', regenerateLessonContent)
+generationRouter.post('/lessons/:id/hinglish', generateLessonHinglishExplanation)
 
 module.exports = generationRouter

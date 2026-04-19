@@ -109,7 +109,21 @@ const generateLesson = ({ courseTitle, moduleTitle, lessonTitle }) => {
   }
 }
 
+const generateHinglishExplanation = ({ courseTitle, moduleTitle, lessonTitle, englishExplanation }) => {
+  const cleanEnglish = String(englishExplanation || '').trim()
+
+  return [
+    `${lessonTitle} ko simple Hinglish mein samjho:`,
+    `Yeh lesson ${courseTitle} ke ${moduleTitle} part ka important concept cover karta hai.`,
+    cleanEnglish
+      ? `English explanation ka short breakdown: ${cleanEnglish.slice(0, 500)}`
+      : 'Isme core idea, practical usage, aur quiz ke through understanding build hoti hai.',
+    'Focus yeh hai ki concept ko real-world context mein quickly apply kar pao.',
+  ].join(' ')
+}
+
 module.exports = {
   generateOutline,
   generateLesson,
+  generateHinglishExplanation,
 }

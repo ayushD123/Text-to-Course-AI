@@ -3,7 +3,11 @@ const mongoose = require('mongoose')
 const Course = require('../models/Course')
 const Module = require('../models/Module')
 const Lesson = require('../models/Lesson')
-const { generateCourseOutlineWithProvider, generateLessonContentWithProvider } = require('../services/aiProviderService')
+const {
+  generateCourseOutlineWithProvider,
+  generateLessonContentWithProvider,
+  generateHinglishExplanationWithProvider,
+} = require('../services/aiProviderService')
 const { searchYoutubeVideos } = require('../services/youtubeService')
 const { getAuthUserId } = require('../middlewares/auth0')
 const AppError = require('../utils/appError')
@@ -21,11 +25,32 @@ const formatLesson = (lessonDoc, { courseTitle, moduleTitle } = {}) => ({
   readings: lessonDoc.readings,
   videoQuery: lessonDoc.videoQuery,
   mcqs: lessonDoc.mcqs,
+  hinglishExplanation: lessonDoc.hinglishExplanation || '',
   courseTitle,
   moduleTitle,
   createdAt: lessonDoc.createdAt,
   updatedAt: lessonDoc.updatedAt,
 })
+
+const buildEnglishExplanationFromContent = (content) => {
+  if (!Array.isArray(content)) return ''
+
+  const paragraphText = content
+    .filter((block) => block?.type === 'paragraph' && typeof block?.text === 'string')
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+
+  if (paragraphText.length > 0) {
+    return paragraphText.join(' ')
+  }
+
+  const headingText = content
+    .filter((block) => block?.type === 'heading' && typeof block?.text === 'string')
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+
+  return headingText.join(' ')
+}
 
 const formatCourse = (courseDoc) => ({
   id: String(courseDoc._id),
@@ -241,6 +266,93 @@ const regenerateLessonContent = async (req, res, next) => {
     })
   } catch (error) {
     return next(error)
+  }
+}
+
+const generateLessonHinglishExplanation = async (req, res, next) => {
+  try {
+    const lessonId = parseLessonIdFromRequest(req)
+    const forceRegenerate = req.body?.forceRegenerate === true
+    const authUserId = getAuthUserId(req)
+
+    const lessonDoc = await Lesson.findById(lessonId)
+
+    if (!lessonDoc) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
+    const [courseDoc, moduleDoc] = await Promise.all([Course.findById(lessonDoc.courseId), Module.findById(lessonDoc.moduleId)])
+
+    if (!courseDoc || !moduleDoc) {
+      throw new AppError(404, 'Associated course/module not found for lesson')
+    }
+
+    const isPrivateCourse = Boolean(courseDoc.isPrivate)
+    const isOwner = Boolean(authUserId && courseDoc.ownerId === authUserId)
+
+    if (isPrivateCourse && !isOwner) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
+    if (!forceRegenerate && lessonDoc.hinglishExplanation && lessonDoc.hinglishExplanation.trim()) {
+      return res.status(200).json({
+        ok: true,
+        data: formatLesson(lessonDoc, {
+          courseTitle: courseDoc.title,
+          moduleTitle: moduleDoc.title,
+        }),
+      })
+    }
+
+    if (lessonDoc.status !== 'generated' || !Array.isArray(lessonDoc.content) || lessonDoc.content.length === 0) {
+      throw new AppError(409, 'Lesson content is not generated yet')
+    }
+
+    const englishExplanation = buildEnglishExplanationFromContent(lessonDoc.content)
+
+    if (!englishExplanation) {
+      throw new AppError(409, 'Lesson does not have enough English explanation content')
+    }
+
+    const hinglishExplanation = await generateHinglishExplanationWithProvider({
+      context: {
+        courseTitle: courseDoc.title,
+        moduleTitle: moduleDoc.title,
+        lessonTitle: lessonDoc.title,
+        englishExplanation,
+      },
+    })
+
+    const updatedLesson = await Lesson.findByIdAndUpdate(
+      lessonId,
+      {
+        $set: {
+          hinglishExplanation,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    )
+
+    if (!updatedLesson) {
+      throw new AppError(404, 'Lesson not found during update')
+    }
+
+    return res.status(200).json({
+      ok: true,
+      data: formatLesson(updatedLesson, {
+        courseTitle: courseDoc.title,
+        moduleTitle: moduleDoc.title,
+      }),
+    })
+  } catch (error) {
+    if (error instanceof AppError) {
+      return next(error)
+    }
+
+    return next(new AppError(502, 'Failed to generate Hinglish explanation. Please try again.'))
   }
 }
 
@@ -477,6 +589,7 @@ module.exports = {
   generateCourseOutline,
   generateLessonContent,
   regenerateLessonContent,
+  generateLessonHinglishExplanation,
   getCourses,
   getCourseById,
   getLessonById,

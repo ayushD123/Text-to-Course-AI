@@ -1,6 +1,7 @@
 const env = require('../config/env')
-const { generateOutline, generateLesson } = require('./mockGeneratorService')
-const { generateWithGroq, generateLessonWithGroq } = require('./groqOutlineProvider')
+const AppError = require('../utils/appError')
+const { generateOutline, generateLesson, generateHinglishExplanation } = require('./mockGeneratorService')
+const { generateWithGroq, generateLessonWithGroq, generateHinglishExplanationWithGroq } = require('./groqOutlineProvider')
 const { normalizeOutline } = require('./outlineSchema')
 const { normalizeLesson } = require('./lessonSchema')
 
@@ -52,7 +53,35 @@ const generateLessonContentWithProvider = async ({ context }) => {
   })
 }
 
+const generateHinglishExplanationWithProvider = async ({ context }) => {
+  const provider = env.GENERATION_PROVIDER
+
+  if (provider === 'groq') {
+    const rawHinglish = await generateHinglishExplanationWithGroq({
+      context,
+      apiKey: env.GROQ_API_KEY,
+      model: env.GROQ_MODEL,
+    })
+
+    const hinglishExplanation = String(rawHinglish?.hinglishExplanation || '').trim()
+
+    if (!hinglishExplanation) {
+      throw new AppError(502, 'AI provider returned empty Hinglish explanation')
+    }
+
+    return hinglishExplanation
+  }
+
+  return generateHinglishExplanation({
+    courseTitle: context.courseTitle,
+    moduleTitle: context.moduleTitle,
+    lessonTitle: context.lessonTitle,
+    englishExplanation: context.englishExplanation,
+  })
+}
+
 module.exports = {
   generateCourseOutlineWithProvider,
   generateLessonContentWithProvider,
+  generateHinglishExplanationWithProvider,
 }

@@ -79,6 +79,24 @@ const buildLessonPrompt = ({ courseTitle, moduleTitle, lessonTitle }) => {
   ].join('\n')
 }
 
+const buildHinglishExplanationPrompt = ({ courseTitle, moduleTitle, lessonTitle, englishExplanation }) => {
+  return [
+    'You are an API that writes a concise Hinglish explanation from English lesson content.',
+    'Return ONLY raw JSON. No markdown, no code fences, no extra text.',
+    'Use this exact JSON shape:',
+    '{ "hinglishExplanation": "string" }',
+    'Rules:',
+    '- Keep the explanation clear, simple, and beginner friendly.',
+    '- Use Roman script Hinglish (mix of Hindi + English words).',
+    '- Length: 120 to 250 words.',
+    '- Do not change the original meaning.',
+    `Course title: ${courseTitle}`,
+    `Module title: ${moduleTitle}`,
+    `Lesson title: ${lessonTitle}`,
+    `English explanation: ${englishExplanation}`,
+  ].join('\n')
+}
+
 const tryParseJson = (rawText) => {
   const text = String(rawText || '').trim()
   if (!text) return null
@@ -181,7 +199,21 @@ const generateLessonWithGroq = async ({ context, apiKey, model }) => {
   })
 }
 
+const generateHinglishExplanationWithGroq = async ({ context, apiKey, model }) => {
+  if (!apiKey) {
+    throw new AppError(500, 'GROQ_API_KEY is missing for groq provider')
+  }
+
+  return parseWithSingleRepair({
+    apiKey,
+    model,
+    initialPrompt: buildHinglishExplanationPrompt(context),
+    malformedErrorMessage: 'AI provider returned malformed hinglish explanation JSON',
+  })
+}
+
 module.exports = {
   generateWithGroq,
   generateLessonWithGroq,
+  generateHinglishExplanationWithGroq,
 }
