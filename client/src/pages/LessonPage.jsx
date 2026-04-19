@@ -29,6 +29,36 @@ const LESSON_LOADING_MESSAGES = [
   'Training tiny invisible professors behind the screen...',
 ]
 
+const AUDIO_LOADING_MESSAGES = [
+  'Warming up tiny Hinglish radio jockeys...',
+  'Mic check... 1, 2, narration incoming!',
+  'Converting text into dramatic classroom voice...',
+  'Teaching the server to speak fluent Hinglish...',
+  'Polishing pronunciation and adding confidence...',
+  'Assembling audio packets at cinematic speed...',
+  'Almost ready... narrator is clearing throat...',
+  'Summoning a voice that sounds like it has read many books...',
+  'Turning paragraphs into podcast-worthy performance...',
+  'Narrator is entering the booth with full main-character energy...',
+  'Upgrading your text from readable to listenable...',
+  'Mixing pronunciation, personality, and a tiny bit of showmanship...',
+  'The server is practicing its best “welcome back, students” voice...',
+  'Injecting your words with smooth narration and zero stage fright...',
+  'Please wait... the audio genie is granting your script a voice...',
+  'Assembling spoken sentences with cinematic dedication...',
+  'Making the text sound like it definitely did the homework...',
+  'Waking up the narrator and handing them imaginary chai...',
+  'Mic check... confidence check... dramatic pause check...',
+  'Teaching the text how to sound expensive...',
+  'Converting plain words into premium professor energy...',
+  'Narrator is currently adjusting imaginary headphones...',
+  'Adding drama, clarity, and just a hint of radio swagger...',
+  'Translating text into smooth, speaker-ready brilliance...',
+  'Our tiny voice artist is clearing their virtual throat...',
+  'Polishing every sentence until it sounds suspiciously wise...',
+  'Recording in progress... the invisible studio light is on...',
+]
+
 const getNextRandomIndex = (currentIndex, total) => {
   if (total <= 1) return 0
 
@@ -54,6 +84,7 @@ function LessonPage() {
   const [isAudioLoading, setIsAudioLoading] = useState(false)
   const [audioError, setAudioError] = useState('')
   const [lessonLoadingMessage, setLessonLoadingMessage] = useState(LESSON_LOADING_MESSAGES[0])
+  const [audioLoadingMessage, setAudioLoadingMessage] = useState(AUDIO_LOADING_MESSAGES[0])
 
   const getAccessToken = async () => {
     if (!isAuthenticated) return ''
@@ -177,6 +208,26 @@ function LessonPage() {
   }, [isLoading])
 
   useEffect(() => {
+    if (!isAudioLoading) {
+      setAudioLoadingMessage(AUDIO_LOADING_MESSAGES[0])
+      return
+    }
+
+    const intervalId = setInterval(() => {
+      setAudioLoadingMessage((currentMessage) => {
+        const currentIndex = AUDIO_LOADING_MESSAGES.indexOf(currentMessage)
+        const safeCurrentIndex = currentIndex === -1 ? 0 : currentIndex
+        const nextIndex = getNextRandomIndex(safeCurrentIndex, AUDIO_LOADING_MESSAGES.length)
+        return AUDIO_LOADING_MESSAGES[nextIndex]
+      })
+    }, 1300)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isAudioLoading])
+
+  useEffect(() => {
     setExplanationMode('english')
     setHinglishError('')
     setAudioError('')
@@ -288,7 +339,7 @@ function LessonPage() {
                       disabled={isAudioLoading}
                       className="inline-flex items-center rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isAudioLoading ? 'Generating audio...' : audioUrl ? 'Regenerate audio' : 'Load audio narration'}
+                      {isAudioLoading ? audioLoadingMessage : audioUrl ? 'Regenerate audio' : 'Load audio narration'}
                     </button>
 
                     {audioError && <ErrorMessage message={audioError} />}
