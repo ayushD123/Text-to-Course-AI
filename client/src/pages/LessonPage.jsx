@@ -50,6 +50,9 @@ function LessonPage() {
   const [explanationMode, setExplanationMode] = useState('english')
   const [isHinglishLoading, setIsHinglishLoading] = useState(false)
   const [hinglishError, setHinglishError] = useState('')
+  const [audioUrl, setAudioUrl] = useState('')
+  const [isAudioLoading, setIsAudioLoading] = useState(false)
+  const [audioError, setAudioError] = useState('')
   const [lessonLoadingMessage, setLessonLoadingMessage] = useState(LESSON_LOADING_MESSAGES[0])
 
   const getAccessToken = async () => {
@@ -108,6 +111,51 @@ function LessonPage() {
     }
   }
 
+  const loadHinglishAudio = async () => {
+    if (!lesson) return
+
+    try {
+      setIsAudioLoading(true)
+      setAudioError('')
+
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+        setAudioUrl('')
+      }
+
+      const accessToken = await getAccessToken()
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/lessons/${lessonId}/hinglish-audio`, {
+        method: 'GET',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      })
+
+      if (!response.ok) {
+        let message = 'Unable to generate audio narration right now.'
+
+        try {
+          const errorJson = await response.json()
+          message = errorJson?.error?.message || message
+        } catch {
+          message = 'Unable to generate audio narration right now.'
+        }
+
+        throw new Error(message)
+      }
+
+      const audioBlob = await response.blob()
+      if (!audioBlob.size) {
+        throw new Error('Audio narration is empty. Please try again.')
+      }
+
+      const nextAudioUrl = URL.createObjectURL(audioBlob)
+      setAudioUrl(nextAudioUrl)
+    } catch (requestError) {
+      setAudioError(requestError.message || 'Unable to generate audio narration right now.')
+    } finally {
+      setIsAudioLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isLoading) {
       setLessonLoadingMessage(LESSON_LOADING_MESSAGES[0])
@@ -131,6 +179,12 @@ function LessonPage() {
   useEffect(() => {
     setExplanationMode('english')
     setHinglishError('')
+    setAudioError('')
+
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl)
+      setAudioUrl('')
+    }
 
     const fetchLesson = async () => {
       try {
@@ -163,6 +217,14 @@ function LessonPage() {
 
     fetchLesson()
   }, [lessonId, isAuthenticated, getAccessTokenSilently])
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
+    }
+  }, [audioUrl])
 
   const englishExplanation = getEnglishExplanation(lesson)
   const hinglishExplanation = (lesson?.hinglishExplanation || '').trim()
@@ -215,7 +277,30 @@ function LessonPage() {
             {explanationMode === 'hinglish' && !isHinglishLoading && hinglishError && <ErrorMessage message={hinglishError} />}
 
             {explanationMode === 'hinglish' && !isHinglishLoading && !hinglishError && (
-              <p className="text-sm leading-6 text-slate-200">{hinglishExplanation || 'Hinglish explanation is not available yet.'}</p>
+              <div className="space-y-3">
+                <p className="text-sm leading-6 text-slate-200">{hinglishExplanation || 'Hinglish explanation is not available yet.'}</p>
+
+                {hinglishExplanation ? (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={loadHinglishAudio}
+                      disabled={isAudioLoading}
+                      className="inline-flex items-center rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-indigo-500 hover:text-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isAudioLoading ? 'Generating audio...' : audioUrl ? 'Regenerate audio' : 'Load audio narration'}
+                    </button>
+
+                    {audioError && <ErrorMessage message={audioError} />}
+
+                    {audioUrl && (
+                      <audio controls className="w-full" src={audioUrl}>
+                        Your browser does not support audio playback.
+                      </audio>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             )}
           </section>
 

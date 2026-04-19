@@ -9,6 +9,7 @@ const {
   generateHinglishExplanationWithProvider,
 } = require('../services/aiProviderService')
 const { searchYoutubeVideos } = require('../services/youtubeService')
+const { generateHinglishAudio } = require('../services/ttsService')
 const { getAuthUserId } = require('../middlewares/auth0')
 const AppError = require('../utils/appError')
 
@@ -356,6 +357,49 @@ const generateLessonHinglishExplanation = async (req, res, next) => {
   }
 }
 
+const getLessonHinglishAudio = async (req, res, next) => {
+  try {
+    const lessonId = parseLessonIdFromRequest(req)
+    const authUserId = getAuthUserId(req)
+
+    const lessonDoc = await Lesson.findById(lessonId)
+
+    if (!lessonDoc) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
+    const [courseDoc, moduleDoc] = await Promise.all([Course.findById(lessonDoc.courseId), Module.findById(lessonDoc.moduleId)])
+
+    if (!courseDoc || !moduleDoc) {
+      throw new AppError(404, 'Associated course/module not found for lesson')
+    }
+
+    const isPrivateCourse = Boolean(courseDoc.isPrivate)
+    const isOwner = Boolean(authUserId && courseDoc.ownerId === authUserId)
+
+    if (isPrivateCourse && !isOwner) {
+      throw new AppError(404, 'Lesson not found')
+    }
+
+    if (!lessonDoc.hinglishExplanation || !lessonDoc.hinglishExplanation.trim()) {
+      throw new AppError(409, 'Hinglish explanation is not generated yet')
+    }
+
+    const audioResult = await generateHinglishAudio({
+      lessonId,
+      text: lessonDoc.hinglishExplanation,
+    })
+
+    res.setHeader('Content-Type', audioResult.contentType)
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Content-Disposition', `inline; filename="lesson-${lessonId}-hinglish.mp3"`)
+
+    return res.status(200).send(audioResult.audioBuffer)
+  } catch (error) {
+    return next(error)
+  }
+}
+
 const getCourses = async (req, res, next) => {
   try {
     const authUserId = getAuthUserId(req)
@@ -590,6 +634,7 @@ module.exports = {
   generateLessonContent,
   regenerateLessonContent,
   generateLessonHinglishExplanation,
+  getLessonHinglishAudio,
   getCourses,
   getCourseById,
   getLessonById,

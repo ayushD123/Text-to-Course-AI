@@ -49,6 +49,11 @@ MONGO_URI=mongodb://127.0.0.1:27017/text_to_learn
 - `GROQ_MODEL` is optional (default: `llama-3.3-70b-versatile`).
 - `YOUTUBE_API_KEY` is required for lesson video enrichment (`GET /api/videos/search`).
 - `YOUTUBE_CACHE_TTL_MS` controls in-memory cache duration for repeated video searches (default `600000`).
+- `TTS_PROVIDER` controls Hinglish narration provider:
+  - `none` (default): narration endpoint returns graceful unavailable error
+  - `streamelements`: uses StreamElements public TTS endpoint (no API key)
+- `TTS_VOICE` sets provider voice (default: `Brian`).
+- `TTS_CACHE_TTL_MS` controls short-lived in-memory cache for generated narration audio (default `300000`).
 
 Example:
 
@@ -58,12 +63,17 @@ GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
 YOUTUBE_API_KEY=
 YOUTUBE_CACHE_TTL_MS=600000
+TTS_PROVIDER=none
+TTS_VOICE=Brian
+TTS_CACHE_TTL_MS=300000
 ```
 
 Notes:
 
 - Lesson generation (`POST /api/lessons/generate`) remains on the existing mock generator in this step.
 - If Groq returns malformed JSON, the server does one repair attempt, then returns a clean API error.
+- Hinglish narration endpoint requires a stored Hinglish explanation first (`POST /api/lessons/:id/hinglish`).
+- `streamelements` TTS is best-effort and can rate-limit or fail temporarily; API returns a helpful message in that case.
 
 ## API
 
@@ -73,6 +83,8 @@ Notes:
 - `POST /api/courses/generate-outline`
 - `GET /api/lessons/:id`
 - `POST /api/lessons/generate`
+- `POST /api/lessons/:id/hinglish`
+- `GET /api/lessons/:id/hinglish-audio`
 - `GET /api/videos/search?query=...`
 
 Response:
