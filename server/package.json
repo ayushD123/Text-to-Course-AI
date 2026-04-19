@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "check": "node -e \"process.env.AUTH0_ISSUER = process.env.AUTH0_ISSUER || 'https://example.auth0.com/'; process.env.AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || 'https://text-to-learn-api'; require('./src/app'); require('./src/config/env'); console.log('server-check-ok')\""
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,208 +1,209 @@
-# Text-to-Learn
+# Text-to-Learn (MERN + AI)
 
-Initial MERN monorepo scaffold for the hackathon project.
+Text-to-Learn generates structured learning courses from a topic prompt. It includes Auth0 authentication, AI-assisted course and lesson generation, video suggestions, Hinglish explanation/audio support, and PDF export for lessons.
 
-## Structure
+## Architecture Overview
+
+### High-level flow
+
+1. User logs in on the React frontend (Auth0).
+2. Frontend calls Express APIs.
+3. Server persists courses/lessons in MongoDB.
+4. AI providers enrich outlines/lesson content.
+5. Frontend renders lessons, quiz blocks, videos, and optional PDF export.
+
+### Monorepo structure
 
 ```
 .
-├─ client/   # Vite + React + Tailwind + React Router
-├─ server/   # Node + Express API
-└─ package.json (root scripts)
+├─ client/              # Vite + React + Tailwind
+│  ├─ src/pages         # Route-level pages
+│  ├─ src/components    # UI components (including LessonPDFExporter)
+│  └─ .env.example
+├─ server/              # Express + MongoDB + provider services
+│  ├─ src/controllers   # API controllers
+│  ├─ src/services      # AI, TTS, YouTube service adapters
+│  ├─ src/models        # Mongoose models
+│  └─ .env.example
+├─ .github/workflows/ci.yml
+└─ package.json         # root scripts
 ```
 
-## Root Scripts
+## Local Setup
 
-- `npm run dev` - runs client and server together
-- `npm run dev:client` - runs Vite dev server
-- `npm run dev:server` - runs Express server with nodemon
-- `npm run build:client` - builds client app
+### 1) Install dependencies
 
-## Quick Start
-
-1. Copy env examples:
-   - `client/.env.example` -> `client/.env`
-   - `server/.env.example` -> `server/.env`
-2. Install dependencies:
-   - `npm install`
-   - `npm --prefix client install`
-   - `npm --prefix server install`
-3. Run app:
-   - `npm run dev`
-
-### MongoDB
-
-- Backend now requires MongoDB.
-- Configure `MONGO_URI` in `server/.env`.
-- Example in `server/.env.example` uses local MongoDB:
-
-```env
-MONGO_URI=mongodb://127.0.0.1:27017/text_to_learn
+```bash
+npm install
+npm --prefix client install
+npm --prefix server install
 ```
 
-### Outline generation provider
+### 2) Configure environment files
 
-- `GENERATION_PROVIDER` controls course outline generation provider:
-  - `mock` (default): deterministic local mock generator
-  - `groq`: uses Groq via official Node SDK (`groq-sdk`)
-- `GROQ_API_KEY` is required only when `GENERATION_PROVIDER=groq`.
-- `GROQ_MODEL` is optional (default: `llama-3.3-70b-versatile`).
-- `YOUTUBE_API_KEY` is required for lesson video enrichment (`GET /api/videos/search`).
-- `YOUTUBE_CACHE_TTL_MS` controls in-memory cache duration for repeated video searches (default `600000`).
-- `TTS_PROVIDER` controls Hinglish narration provider:
-  - `none` (default): narration endpoint returns graceful unavailable error
-  - `streamelements`: uses StreamElements public TTS endpoint (no API key)
-- `TTS_VOICE` sets provider voice (default: `Brian`).
-- `TTS_CACHE_TTL_MS` controls short-lived in-memory cache for generated narration audio (default `300000`).
+Copy examples and fill required values:
 
-Example:
+- `client/.env.example` -> `client/.env`
+- `server/.env.example` -> `server/.env`
 
-```env
-GENERATION_PROVIDER=mock
-GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
-YOUTUBE_API_KEY=
-YOUTUBE_CACHE_TTL_MS=600000
-TTS_PROVIDER=none
-TTS_VOICE=Brian
-TTS_CACHE_TTL_MS=300000
+### 3) Run in development
+
+```bash
+npm run dev
 ```
 
-Notes:
+### 4) Build frontend
 
-- Lesson generation (`POST /api/lessons/generate`) remains on the existing mock generator in this step.
-- If Groq returns malformed JSON, the server does one repair attempt, then returns a clean API error.
-- Hinglish narration endpoint requires a stored Hinglish explanation first (`POST /api/lessons/:id/hinglish`).
-- `streamelements` TTS is best-effort and can rate-limit or fail temporarily; API returns a helpful message in that case.
-
-## API
-
-- `GET /api/health`
-- `GET /api/courses`
-- `GET /api/courses/:id`
-- `POST /api/courses/generate-outline`
-- `GET /api/lessons/:id`
-- `POST /api/lessons/generate`
-- `POST /api/lessons/:id/hinglish`
-- `GET /api/lessons/:id/hinglish-audio`
-- `GET /api/videos/search?query=...`
-
-Response:
-
-```json
-{
-  "ok": true,
-  "service": "text-to-learn-api"
-}
+```bash
+npm run build
 ```
 
-### POST /api/courses/generate-outline
+## Scripts
 
-Request:
+### Root
 
-```json
-{
-  "topic": "JavaScript closures"
-}
-```
+- `npm run dev` - run frontend + backend together
+- `npm run dev:client` - run Vite client
+- `npm run dev:server` - run Express server with nodemon
+- `npm run build` - build client bundle
+- `npm run build:client` - build client bundle directly
+- `npm run check:server` - run basic backend bootstrap checks
 
-Response (shape):
+### Server
 
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "67f5f95e1a5e2639da9e8e01",
-    "topic": "JavaScript closures",
-    "title": "Javascript Closures Course",
-    "description": "A practical and beginner-friendly course outline for Javascript Closures.",
-    "tags": ["javascript-closures", "javascript", "closures", "beginner-friendly"],
-    "modules": [
-      {
-        "id": "67f5f95e1a5e2639da9e8e02",
-        "title": "Javascript Closures Module 1",
-        "order": 1,
-        "lessons": [
-          {
-            "id": "67f5f95e1a5e2639da9e8e03",
-            "title": "Javascript Closures Lesson 1.1",
-            "order": 1,
-            "status": "stub"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+- `npm --prefix server run dev`
+- `npm --prefix server run start`
+- `npm --prefix server run check`
 
-### POST /api/lessons/generate
+## Environment Variables
 
-Request:
+### Frontend (`client/.env`)
 
-```json
-{
-  "lessonId": "67f5f95e1a5e2639da9e8e03"
-}
-```
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | Yes | Backend base URL, e.g. `http://localhost:5000/api` |
+| `VITE_AUTH0_DOMAIN` | Yes | Auth0 domain |
+| `VITE_AUTH0_CLIENT_ID` | Yes | Auth0 SPA client id |
+| `VITE_AUTH0_AUDIENCE` | Yes | API audience used in access token |
 
-Response (shape):
+### Backend (`server/.env`)
 
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "67f5f95e1a5e2639da9e8e03",
-    "courseId": "67f5f95e1a5e2639da9e8e01",
-    "moduleId": "67f5f95e1a5e2639da9e8e02",
-    "title": "Javascript Closures Lesson 1.1",
-    "status": "generated",
-    "objectives": ["..."],
-    "content": [
-      { "type": "heading", "text": "..." },
-      { "type": "paragraph", "text": "..." },
-      { "type": "code", "language": "javascript", "code": "..." },
-      { "type": "video", "provider": "youtube", "title": "...", "videoQuery": "..." },
-      { "type": "mcq", "text": "..." }
-    ],
-    "readings": ["..."],
-    "videoQuery": "...",
-    "mcqs": [
-      {
-        "question": "...",
-        "options": ["...", "...", "...", "..."],
-        "answer": "A",
-        "explanation": "..."
-      }
-    ]
-  }
-}
-```
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | No | API port (default `5000`) |
+| `NODE_ENV` | No | `development` / `production` |
+| `MONGO_URI` | Yes | MongoDB connection URI |
+| `AUTH0_ISSUER` | Yes | Auth0 issuer URL for JWT verification |
+| `AUTH0_AUDIENCE` | Yes | Auth0 API audience for JWT verification |
+| `GENERATION_PROVIDER` | No | `mock` or `groq` |
+| `GROQ_API_KEY` | If `GENERATION_PROVIDER=groq` | Groq API key |
+| `GROQ_MODEL` | No | Groq model name |
+| `YOUTUBE_API_KEY` | Recommended | YouTube Data API key for video suggestions |
+| `YOUTUBE_CACHE_TTL_MS` | No | YouTube search cache TTL |
+| `TTS_PROVIDER` | No | `none` or `streamelements` |
+| `TTS_VOICE` | No | TTS voice label |
+| `TTS_CACHE_TTL_MS` | No | TTS cache TTL |
 
-### GET /api/courses
+## API Endpoints
 
-Returns all saved courses (without nested modules).
+Base URL: `/api`
 
-### GET /api/courses/:id
+### Health
+- `GET /health`
 
-Returns a single course with nested modules and lesson stubs/generated lesson statuses.
+### Courses
+- `GET /courses`
+- `GET /courses/:id`
+- `DELETE /courses/:id`
+- `POST /courses/:id/claim` (auth required)
+- `POST /courses/generate-outline` (auth required)
+- `GET /me/courses` (auth required)
 
-### GET /api/lessons/:id
+### Lessons
+- `GET /lessons/:id`
+- `POST /lessons/generate`
+- `POST /lessons/:id/regenerate`
+- `POST /lessons/:id/hinglish`
+- `GET /lessons/:id/hinglish-audio`
 
-Returns one lesson by id, including generated content if already generated.
+### Video
+- `GET /videos/search?query=...`
 
-### GET /api/videos/search?query=...
+## Demo Flow (for judges)
 
-Searches YouTube from the backend (API key stays server-side) and returns the top 1-3 embeddable educational videos for the query. Repeated identical queries are served from a simple in-memory cache.
+1. Sign in.
+2. Enter a topic and generate a course outline.
+3. Open a module lesson and generate lesson content.
+4. Toggle English/Hinglish explanation.
+5. Load Hinglish narration audio.
+6. Download lesson PDF.
 
-Error response (for validation issues):
+## Suggested Demo Topics
 
-```json
-{
-  "ok": false,
-  "error": {
-    "message": "Invalid request body",
-    "details": ["topic is required and must be a non-empty string"]
-  }
-}
-```
+- JavaScript Closures
+- React State vs Props
+- MongoDB Indexing Basics
+- REST API Design for Beginners
+- Binary Search and Time Complexity
+- System Design Fundamentals for Students
+
+## Deployment Guide (Do not deploy from this doc directly)
+
+### Frontend on Vercel
+
+1. Import GitHub repo in Vercel.
+2. Set **Root Directory** to `client`.
+3. Build command: `npm run build`
+4. Output directory: `dist`
+5. Add frontend env vars in Vercel project settings:
+   - `VITE_API_BASE_URL` (point to Render backend `/api` URL)
+   - `VITE_AUTH0_DOMAIN`
+   - `VITE_AUTH0_CLIENT_ID`
+   - `VITE_AUTH0_AUDIENCE`
+6. Deploy.
+
+### Backend on Render
+
+1. Create new **Web Service** from repo.
+2. Set **Root Directory** to `server`.
+3. Runtime: Node 22.
+4. Build command: `npm ci`
+5. Start command: `npm run start`
+6. Add backend env vars:
+   - `PORT=5000` (Render usually injects PORT automatically; keep fallback)
+   - `NODE_ENV=production`
+   - `MONGO_URI`
+   - `AUTH0_ISSUER`
+   - `AUTH0_AUDIENCE`
+   - `GENERATION_PROVIDER`
+   - `GROQ_API_KEY` (if using groq)
+   - `GROQ_MODEL`
+   - `YOUTUBE_API_KEY`
+   - `YOUTUBE_CACHE_TTL_MS`
+   - `TTS_PROVIDER`
+   - `TTS_VOICE`
+   - `TTS_CACHE_TTL_MS`
+7. Deploy and copy the public backend URL.
+8. Update Vercel `VITE_API_BASE_URL` to `${RENDER_BACKEND_URL}/api`.
+
+## GitHub Actions CI
+
+Workflow file: `.github/workflows/ci.yml`
+
+On push/PR, CI runs:
+1. dependency install (root/client/server)
+2. client build
+3. server basic checks
+
+## Final Sanity Checklist (Pre-handoff)
+
+- [ ] `client/.env` configured with valid Auth0 + API URL
+- [ ] `server/.env` configured with MongoDB + Auth0 + provider keys
+- [ ] `npm run dev` works locally
+- [ ] `npm run build` succeeds
+- [ ] `npm run check:server` succeeds
+- [ ] Course generation + lesson generation flow works
+- [ ] Video search works (if API key provided)
+- [ ] Hinglish explanation/audio path behaves as expected
+- [ ] Lesson PDF download works for long lessons (multi-page)
+- [ ] CI workflow passes on latest commit
