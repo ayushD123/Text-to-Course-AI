@@ -129,7 +129,7 @@ Base URL: `/api`
 ### Video
 - `GET /videos/search?query=...`
 
-## Demo Flow (for judges)
+## Demo Flow :
 
 1. Sign in.
 2. Enter a topic and generate a course outline.
